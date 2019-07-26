@@ -1,49 +1,49 @@
 int lastRefresh = 0;
+int ledstate;
+long frameTime;
 
 void refreshLED() {
- if (whatToDo == 0) {
-    closeTheDoor();
-  } else if (whatToDo == 1) {
-    openTheDoor();
-  } else if (whatToDo == 2) {
-    changeColor();
+  if (millis() - frameTime > 100) {
+    frameTime=millis();
+    if (whatToDo == 1) {
+      closeTheDoor();
+    } else if (whatToDo == 2) {
+      change();
+    }
   }
-  
-  
-  openTheDoor();
-delay(2000);
-  closeTheDoor();
-  }
-
-void changeColor() {
-
 }
+
 
 void closeTheDoor() {
-  for (int i = 1; i < 8; i++)
-  {
-    for (int box = 1; box < 5; box++)
-    {
-      leds[0][box*7-i] = CRGB::Black;
-      leds[1][box*7-i] = CRGB::Black;
-    }
-    FastLED.show();
-    delay(100);
 
+  for (int box = 1; box < 5; box++)
+  {
+    leds[0][box * 7 - ledstate] = CRGB::Black;
+    leds[1][box * 7 - ledstate] = CRGB::Black;
+  }
+  FastLED.show();
+
+  ledstate++;
+  if (ledstate == 8) {
+    whatToDo = 0;
+    ledstate = 1;
   }
 }
 
-void openTheDoor() {
-  for (int i = 1; i < 8; i++)
-  {
-    for (int box = 1; box < 5; box++)
-    {
-      Serial.println(box-1);
-      leds[0][box*7-i] = rainbowColor(10+states[0][box-1]*60,40);
-      leds[1][box*7-i] = rainbowColor(10+states[1][box-1]*60,40);
-    }
-    FastLED.show();
-    delay(100);
+void change() {
 
+  for (int box = 1; box < 5; box++)
+  {
+    leds[0][box * 7 - ledstate] = rainbowColor(10 + states[0][box - 1] * 60, 40);
+    leds[1][box * 7 - ledstate] = rainbowColor(10 + states[1][box - 1] * 60, 40);
   }
+  FastLED.show();
+
+
+  ledstate++;
+  if (ledstate == 8) {
+    whatToDo = 0;
+    ledstate = 1;
+  }
+
 }

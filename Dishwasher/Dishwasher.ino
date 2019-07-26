@@ -53,12 +53,22 @@ void setup() {
 
   /*Connecting to Wifi or starting accesspoint*/
   //setupWlan();
-
+  whatToDo = 2;
 }
 
 void loop() {
   //refreshPage();
   refreshLED();
+  if (Serial.available() > 0) {
+
+    int incomingByte = Serial.read(); // read the incoming byte:
+
+    Serial.print(" I received:");
+
+    Serial.println(incomingByte-48);
+    whatToDo = incomingByte-48;
+
+  }
 }
 
 void setProgress(int character, int startIndex, int color) {
@@ -216,10 +226,10 @@ HttpResponse reactOnHTTPCall(String message) {
 
   } else if (match == 1) {
     //Door opening
-    whatToDo = 1;
+    whatToDo = 2;
   } else if (match == 2) {
     //Door closing
-    whatToDo = 0;
+    whatToDo = 1;
 
   }
   if (match == -1) {
