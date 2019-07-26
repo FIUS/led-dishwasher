@@ -9,7 +9,7 @@ struct HttpResponse {
   String html;
 };
 
-const int NUM_LEDS = 4*7;
+const int NUM_LEDS = 4 * 7;
 const int ENDPOINT_COUNT = 3;
 
 const int DATA_PIN_UP = 2;
@@ -24,8 +24,9 @@ int status = WL_IDLE_STATUS;
 WiFiServer server(80);
 
 //Status variables
-
-
+int states[2][8];
+int oldstates[2][8];
+int whatToDo;
 //End variables
 
 
@@ -35,21 +36,26 @@ void setup() {
   endpoints[0] = "changeWasherState";
   endpoints[1] = "doorOpen";
   endpoints[2] = "doorClosed";
-
+  
+states[0][1]=1;
+states[0][3]=2;
+states[1][0]=1;
+states[1][2]=2;
   /*Initializing LEDs and serial port*/
 
   FastLED.addLeds<NEOPIXEL, DATA_PIN_UP>(leds[0], NUM_LEDS);
   FastLED.addLeds<NEOPIXEL, DATA_PIN_DOWN>(leds[1], NUM_LEDS);
+  
   Serial.begin(9600);
-  FastLED.show();
+  
 
   /*Connecting to Wifi or starting accesspoint*/
-  setupWlan();
+  //setupWlan();
 
 }
 
 void loop() {
-  refreshPage();
+  //refreshPage();
   refreshLED();
 }
 
@@ -114,7 +120,7 @@ void refreshPage() {
   bool check = false;
   HttpResponse resp;
   if (client) {
-    
+
     /*Client connected to webserver*/
     String parsingString = "";
 
@@ -185,9 +191,9 @@ HttpResponse reactOnHTTPCall(String message) {
     }
   }
   /*
-   * 
-   * Variable temp will contain any text send with the post request
-   */
+
+     Variable temp will contain any text send with the post request
+  */
   //debugInfo += temp + "\n";
   /*Replacing http substituted character*/
   temp.replace("%20", " ");
@@ -195,14 +201,25 @@ HttpResponse reactOnHTTPCall(String message) {
 
   /*Parsing the endpoint info*/
   if (match == 0) {
-    int r = temp.substring(0, 3).toInt();
-    int g = temp.substring(3, 6).toInt();
-    int b = temp.substring(6, 9).toInt();
+    int state = temp.substring(0, 1).toInt();
+    int washer = temp.substring(1, 2).toInt();
 
-    //color = CRGB(r, g, b);
-    //onColorChanged = true;
+    if (washer < 4) {
+      states[0][washer] = state;
+    } else {
+      states[1][washer - 4] = state;
+    }
+    whatToDo=2;
+    
 
-  } 
+  } else if (match == 1) {
+    //Door opening
+    whatToDo=1;
+  } else if (match == 2) {
+    //Door closing
+    whatToDo=0;
+
+  }
   if (match == -1) {
     output = "HTTP/1.1 404 NO ENDPOINT";
     html = "Endpoint tried: " + message;
