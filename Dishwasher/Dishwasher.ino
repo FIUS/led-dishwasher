@@ -24,8 +24,8 @@ int status = WL_IDLE_STATUS;
 WiFiServer server(80);
 
 //Status variables
-int states[2][8];
-int oldstates[2][8];
+int states[2][4];
+int oldstates[2][4];
 int whatToDo;
 //End variables
 
@@ -36,18 +36,20 @@ void setup() {
   endpoints[0] = "changeWasherState";
   endpoints[1] = "doorOpen";
   endpoints[2] = "doorClosed";
-  
-states[0][1]=1;
-states[0][3]=2;
-states[1][0]=1;
-states[1][2]=2;
+
+  states[0][0] = 0;
+  states[0][1] = 1;
+  states[0][2] = 2;
+  states[0][3] = 0;
+  states[1][1] = 2;
+  states[1][3] = 1;
   /*Initializing LEDs and serial port*/
 
   FastLED.addLeds<NEOPIXEL, DATA_PIN_UP>(leds[0], NUM_LEDS);
   FastLED.addLeds<NEOPIXEL, DATA_PIN_DOWN>(leds[1], NUM_LEDS);
-  
+
   Serial.begin(9600);
-  
+
 
   /*Connecting to Wifi or starting accesspoint*/
   //setupWlan();
@@ -209,15 +211,15 @@ HttpResponse reactOnHTTPCall(String message) {
     } else {
       states[1][washer - 4] = state;
     }
-    whatToDo=2;
-    
+    whatToDo = 2;
+
 
   } else if (match == 1) {
     //Door opening
-    whatToDo=1;
+    whatToDo = 1;
   } else if (match == 2) {
     //Door closing
-    whatToDo=0;
+    whatToDo = 0;
 
   }
   if (match == -1) {
