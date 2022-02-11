@@ -1,2 +1,3 @@
-Dishwasher/WLAN_CONF.hpp
+Dishwasher/settings.h
 .vscode/
+*.bin
