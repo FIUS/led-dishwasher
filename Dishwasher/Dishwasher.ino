@@ -1,6 +1,7 @@
 #include <FastLED.h>
 #include <WiFi.h>
 #include <PubSubClient.h>
+#include <ArduinoJson.h>
 
 //#define DEBUG
 
@@ -13,10 +14,11 @@
 #define MQTT_USER "my user"
 #define MQTT_PASS "my pw"
 
-#define MQTT_TOPIC_DOOR "my topic"
+#define MQTT_TOPIC_POWERSTATE "my topic"
 #define MQTT_TOPIC_DISHWASHER_PREFIX "my topic"
 #define MQTT_TOPIC_DISHWASHER_SUFFIX "state"
 
+#define MQTT_MAX_PAYLOAD_SIZE 500
 
 //times in msclientclient
 #define LED_PATTERN_WIFI_CONN_ON_TIME 1000
@@ -62,7 +64,6 @@ int sensor_state_debounce_count;
 
 WiFiClient wifiClient = WiFiClient();
 PubSubClient mqttClient = PubSubClient(wifiClient);
-
 
 CRGB led_array[2][NUM_LEDS];
 
@@ -239,14 +240,14 @@ void manageWifi() {
 
 String getDishwasherName(int id) {
   switch(id) {
-    case 0: return "Miraculix";
-    case 1: return "Idefix";
-    case 2: return "Obelix";
-    case 3: return "Asterix";
-    case 4: return "Donald";
-    case 5: return "Track";
-    case 6: return "Trick";
-    case 7: return "Tick";
+    case 0: return "miraculix";
+    case 1: return "idefix";
+    case 2: return "obelix";
+    case 3: return "asterix";
+    case 4: return "donald";
+    case 5: return "track";
+    case 6: return "trick";
+    case 7: return "tick";
   }
   return "Unknown";
 }
@@ -256,8 +257,8 @@ String getDishwasherName(int id) {
  */
 void subscribeToTopics() {
   Serial.print("[MQTT] Subscribing to on/off topic: ");
-  Serial.println(MQTT_TOPIC_DOOR);
-  mqttClient.subscribe(MQTT_TOPIC_DOOR);
+  Serial.println(MQTT_TOPIC_POWERSTATE);
+  mqttClient.subscribe(MQTT_TOPIC_POWERSTATE);
 #ifndef DEBUG
     Serial.print("[MQTT] Subscribing to dishwasher topics like: ");
     Serial.print(MQTT_TOPIC_DISHWASHER_PREFIX);
@@ -281,15 +282,20 @@ void subscribeToTopics() {
 /*
  * Handles the mqtt messages for turning on and off.
  */
-void handleOnOff(String payload) {
-  if(payload == "closed") {
+void handleOnOff(StaticJsonDocument<MQTT_MAX_PAYLOAD_SIZE> payload) {
+  if(!payload.containsKey("powerstate")) {
+    Serial.println("[MQTT][ON/OFF] Missing powerstate field in payload.");
+  }
+  String powerstate = String((const char*) payload["powerstate"]);
+
+  if(powerstate == "off") {
     on_state = false;
-    Serial.println("[ON/OFF] Turning off.");
-  } else if (payload == "open") {
+    Serial.println("[MQTT][ON/OFF] Turning off.");
+  } else if (powerstate == "on") {
     on_state = true;
-    Serial.println("[ON/OFF] Turning on.");
+    Serial.println("[MQTT][ON/OFF] Turning on.");
   } else {
-    Serial.println("[ON/OFF] Unknown payload on door state topic.");
+    Serial.println("[MQTT][ON/OFF] Unknown powerstate.");
   }
 }
 
@@ -297,14 +303,19 @@ void handleOnOff(String payload) {
 /*
  * Handles the mqtt messages for the dishwasher state.
  */
-void handleDishwasherState(String topic, String payload) {
+void handleDishwasherState(String topic, StaticJsonDocument<MQTT_MAX_PAYLOAD_SIZE> payload) {
   if(! topic.startsWith(MQTT_TOPIC_DISHWASHER_PREFIX)) {
-    Serial.println("[MQTT] Weird topic start");
+    Serial.println("[MQTT][DISHWASHER] Weird topic start");
   }
   if(! topic.endsWith(MQTT_TOPIC_DISHWASHER_SUFFIX)) {
-    Serial.println("[MQTT] Weird topic end");
+    Serial.println("[MQTT][DISHWASHER] Weird topic end");
   }
-  String dishwasher_name = topic.substring(sizeof(MQTT_TOPIC_DISHWASHER_PREFIX) - 1 , 1 + topic.length() - sizeof(MQTT_TOPIC_DISHWASHER_SUFFIX));
+  if(!payload.containsKey("dishwasher")) {
+    Serial.println("[MQTT][DISHWASHER] Missing dishwasher field in payload.");
+    return;
+  }
+  String dishwasher_name = String((const char*)payload["dishwasher"]);
+
   int dishwasher = -1;
   for(int i = 0; i < 8; i++) {
     if(dishwasher_name == getDishwasherName(i)) {
@@ -313,29 +324,35 @@ void handleDishwasherState(String topic, String payload) {
   }
 
   if(dishwasher == -1) {
-    Serial.print("[DISHWASHER] Unknown dishwasher: ");
+    Serial.print("[MQTT][DISHWASHER] Unknown dishwasher: ");
     Serial.println(dishwasher_name);
     return;
   }
 
-  if(payload == "empty") {
+  if(!payload.containsKey("state")) {
+    Serial.println("[MQTT][DISHWASHER] Missing state field in payload.");
+    return;
+  }
+  String state = String((const char*)payload["state"]);
+
+  if(state == "empty") {
     dishwasher_states[dishwasher] = DishwasherState::Empty;
     Serial.print("[DISHWASHER] New state for ");
     Serial.print(dishwasher);
     Serial.println(": Empty.");
-  } else if (payload == "running") {
+  } else if (state == "running") {
     dishwasher_states[dishwasher] = DishwasherState::Running;
     Serial.print("[DISHWASHER] New state for ");
     Serial.print(dishwasher);
     Serial.println(": Running.");
-  } else if (payload == "done") {
+  } else if (state == "done") {
     dishwasher_states[dishwasher] = DishwasherState::Done;
     Serial.print("[DISHWASHER] New state for ");
     Serial.print(dishwasher);
     Serial.println(": Done.");
   } else {
-    Serial.print("[DUSHWASHER] Unknown state: ");
-    Serial.println(payload);
+    Serial.print("[MQTT][DISHWASHER] Unknown state: ");
+    Serial.println(state);
   }
 }
 
@@ -343,19 +360,22 @@ void handleDishwasherState(String topic, String payload) {
  * Function receiving the mqtt messages
  */
 void callback(char* topic_chars, byte* payload_bytes, unsigned int len) {
-  String payload;
-  payload.reserve(len);
-  for(int i = 0; i < len; i++) {
-    payload += (char)payload_bytes[i];
+  StaticJsonDocument<MQTT_MAX_PAYLOAD_SIZE> payload;
+  DeserializationError error = deserializeJson(payload, payload_bytes, len);
+  if (error) {
+    Serial.print("[MQTT] Deserialization error: ");
+    Serial.println(error.f_str());
+    return;
   }
   String topic = String(topic_chars);
 #ifdef DEBUG
   Serial.print("[MQTT] Got message on ");
   Serial.print(topic);
   Serial.print(": ");
-  Serial.println(payload);
+  serializeJson(payload, Serial);
+  Serial.println("");
 #endif
-  if(topic == MQTT_TOPIC_DOOR) {
+  if(topic == MQTT_TOPIC_POWERSTATE) {
     handleOnOff(payload);
   } else {
     handleDishwasherState(topic, payload);
