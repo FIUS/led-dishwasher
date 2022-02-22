@@ -405,11 +405,11 @@ void manageMqtt() {
  */
 CRGB color_for_dishwasher_state(DishwasherState state) {
   if(state == DishwasherState::Empty) {
-    return CRGB::Green;
+    return CRGB(0, 118, 186);
   } else if(state == DishwasherState::Running) {
-    return CRGB::Yellow;
+    return CRGB(162, 255, 0);
   } else {
-    return CRGB::Red;
+    return CRGB(255, 10, 0);
   }
 }
 
